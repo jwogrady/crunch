@@ -21,9 +21,10 @@ describe("validateImagePath", () => {
     expect(result.error || !result.valid).toBeTruthy();
   });
 
-  test("handles empty paths", () => {
+  test("rejects empty paths", () => {
     const result = validateImagePath("", "optimized");
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(result.error).toBeDefined();
   });
 
   test("handles nested paths", () => {
