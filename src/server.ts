@@ -428,12 +428,29 @@ app.get("/api/images/*/preview", async (context) => {
     }
 
     // filePath from validateImagePath already includes baseDir, use it directly
-    const finalPath = path.resolve(filePath);
+    let finalPath = path.resolve(filePath);
     logger.debug(`Looking for image at: ${finalPath}`);
     
+    // If direct path doesn't exist, try to find by filename (backwards compatibility)
     if (!fs.existsSync(finalPath)) {
-      logger.warn(`Image not found: ${finalPath}`, { decodedPath, filePath });
-      return new Response("Image not found", { status: 404 });
+      const fileName = path.basename(decodedPath);
+      logger.debug(`Direct path not found, searching for filename: ${fileName}`);
+      const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+      if (found) {
+        // Validate found path too
+        const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+        const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+        if (foundValidation.valid && foundValidation.filePath) {
+          finalPath = foundValidation.filePath;
+          logger.debug(`Found image at: ${finalPath}`);
+        } else {
+          logger.warn(`Found file but validation failed: ${found}`);
+          return new Response("Image not found", { status: 404 });
+        }
+      } else {
+        logger.warn(`Image not found: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
+        return new Response("Image not found", { status: 404 });
+      }
     }
     
     logger.debug(`Image found, generating thumbnail`);
