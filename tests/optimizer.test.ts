@@ -101,6 +101,27 @@ describe("optimizeImage", () => {
     expect(results[0].output).toMatch(/\d{4}\/\d{2}\/\d{2}/);
   }, 10000);
 
+  test("generates relativePath without optimized/ prefix in metadata", async () => {
+    const buffer = await createTestImage();
+    const options: OptimizationOptions = {
+      width: 100,
+      quality: 85,
+      format: "webp",
+    };
+
+    const results = await optimizeImage(buffer, "test.jpg", options, testDir, testOriginalsDir);
+
+    // Verify metadata was saved with correct relativePath
+    const { loadMetadata } = await import("../src/metadata");
+    const relativePath = path.relative(testDir, results[0].output).replace(/\\/g, "/");
+    const metadata = loadMetadata(results[0].output, relativePath, results[0].originalPath);
+    
+    expect(metadata).toBeTruthy();
+    expect(metadata!.relativePath).toBe(relativePath);
+    expect(metadata!.relativePath).not.toContain("optimized/");
+    expect(metadata!.relativePath).toMatch(/^\d{4}\/\d{2}\/\d{2}\//);
+  }, 10000);
+
   test("saves original file", async () => {
     const buffer = await createTestImage();
     const options: OptimizationOptions = {

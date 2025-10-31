@@ -30,6 +30,34 @@ describe("validateImagePath", () => {
     const result = validateImagePath("2024/12/19/subfolder/image.jpg", "optimized");
     expect(result.valid).toBe(true);
   });
+
+  test("normalizes paths with optimized/ prefix", () => {
+    const withPrefix = validateImagePath("optimized/2024/12/19/image.jpg", "optimized");
+    const withoutPrefix = validateImagePath("2024/12/19/image.jpg", "optimized");
+    
+    expect(withPrefix.valid).toBe(true);
+    expect(withoutPrefix.valid).toBe(true);
+    // Both should resolve to same absolute path
+    expect(path.resolve(withPrefix.filePath!)).toBe(path.resolve(withoutPrefix.filePath!));
+  });
+
+  test("rejects path that is exactly 'optimized'", () => {
+    const result = validateImagePath("optimized", "optimized");
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("file path");
+  });
+
+  test("rejects empty path after normalization", () => {
+    const result = validateImagePath("optimized/", "optimized");
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("empty");
+  });
+
+  test("returns absolute resolved paths", () => {
+    const result = validateImagePath("2024/12/19/image.jpg", "optimized");
+    expect(result.valid).toBe(true);
+    expect(path.isAbsolute(result.filePath!)).toBe(true);
+  });
 });
 
 describe("validateFileSize", () => {
