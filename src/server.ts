@@ -24,6 +24,10 @@ const app = new Elysia();
 // Enable CORS for frontend
 app.use(cors());
 
+// IMPORTANT: Route registration order matters in Elysia
+// More specific routes must be registered BEFORE wildcard routes
+// All API routes are registered before the catch-all /* route at the end
+
 /**
  * Sanitize error message for client (hide internal details in production)
  */
@@ -808,11 +812,12 @@ if (config.nodeEnv === "production") {
       
       // NEVER serve static files for API routes - they should be handled by API routes above
       if (filePath.startsWith("/api") || filePath.startsWith("/optimize") || filePath.startsWith("/download")) {
-        // This should not happen if routes are registered correctly, but return JSON error just in case
-        return {
+        // This should not happen if routes are registered correctly, but return proper JSON error just in case
+        // This is a fallback - API routes registered above should match first
+        return Response.json({
           success: false,
           error: "Not Found",
-        };
+        }, { status: 404 });
       }
       
       // Default to index.html for root
