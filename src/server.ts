@@ -587,7 +587,20 @@ app.get("/api/images/export/wordpress", async () => {
 if (config.nodeEnv === "production") {
   const distPath = path.join(process.cwd(), "src/web/dist");
   
-  // Check if dist directory exists
+  // Try to build if dist doesn't exist (fallback for Railway)
+  if (!fs.existsSync(distPath)) {
+    logger.warn("Static dist directory not found. Attempting to build...");
+    try {
+      const { execSync } = require("child_process");
+      execSync("bun run build", { stdio: "inherit", cwd: process.cwd() });
+      logger.info("Frontend built successfully");
+    } catch (error) {
+      logger.error("Failed to build frontend:", error);
+      logger.warn("Continuing without static file serving...");
+    }
+  }
+  
+  // Check if dist directory exists after potential build
   if (fs.existsSync(distPath)) {
     // Serve static files
     app.get("/*", (context) => {
