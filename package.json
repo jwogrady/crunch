@@ -5,12 +5,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/bun-image-optimizer.git"
+    "url": "git@github.com:jwogrady/crunch.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/bun-image-optimizer/issues"
+    "url": "https://github.com/jwogrady/crunch/issues"
   },
-  "homepage": "https://github.com/yourusername/bun-image-optimizer#readme",
+  "homepage": "https://github.com/jwogrady/crunch#readme",
   "keywords": [
     "image-optimization",
     "bun",
