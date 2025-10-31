@@ -10,6 +10,7 @@ import {
   saveMetadata,
   renameImage,
   generateSEOFilename,
+  getMetadataPath,
   ImageMetadata,
 } from "./metadata";
 import { validateImagePath } from "./server/utils/security";
@@ -23,6 +24,292 @@ const app = new Elysia();
 
 // Enable CORS for frontend
 app.use(cors());
+
+// Middleware to handle URL-encoded paths in /api/images/* routes
+// This intercepts requests BEFORE routing to handle URL-encoded slashes (%2F)
+app.onRequest(async ({ request }) => {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  if (!pathname.startsWith("/api/images/") || pathname === "/api/images" || pathname.startsWith("/api/images/export/")) {
+    return; // Let normal routing handle it
+  }
+
+  // Match preview (GET), metadata (GET/PUT), and rename (POST) requests
+  const previewMatch = pathname.match(/^\/api\/images\/(.+)\/preview$/);
+  const metadataMatch = pathname.match(/^\/api\/images\/(.+)\/metadata$/);
+  const renameMatch = pathname.match(/^\/api\/images\/(.+)\/rename$/);
+
+  if (!previewMatch && !metadataMatch && !renameMatch) {
+    return; // Not a wildcard route we handle, let normal routing handle it
+  }
+
+  const encodedPath = previewMatch?.[1] || metadataMatch?.[1] || renameMatch?.[1] || "";
+  const decodedPath = decodeURIComponent(encodedPath);
+
+  // Handle preview requests (GET)
+  if (previewMatch && request.method === "GET") {
+    try {
+      const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+      
+      if (!valid || !filePath) {
+        return Response.json({
+          success: false,
+          error: validationError || "Invalid path",
+        }, { status: 400 });
+      }
+
+      let finalPath = filePath;
+      
+      // If direct path doesn't exist, try to find by filename
+      if (!fs.existsSync(finalPath)) {
+        const fileName = path.basename(decodedPath);
+        const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+        if (found) {
+          const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+          const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+          if (foundValidation.valid && foundValidation.filePath) {
+            finalPath = foundValidation.filePath;
+          } else {
+            finalPath = found;
+          }
+        } else {
+          return Response.json({
+            success: false,
+            error: "Image not found",
+          }, { status: 404 });
+        }
+      }
+
+      if (!fs.existsSync(finalPath)) {
+        return Response.json({
+          success: false,
+          error: "Image not found",
+        }, { status: 404 });
+      }
+
+      // Generate thumbnail
+      const thumbnail = await getCachedThumbnail(finalPath, CONSTANTS.THUMBNAIL_SIZE);
+
+      return new Response(thumbnail, {
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    } catch (error) {
+      logger.error("Error generating preview in middleware:", error);
+      return Response.json({
+        success: false,
+        error: sanitizeError(error),
+      }, { status: 500 });
+    }
+  }
+
+  // Handle metadata PUT requests
+  if (metadataMatch && request.method === "PUT") {
+    try {
+      const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+      
+      if (!valid || !filePath) {
+        return Response.json({
+          success: false,
+          error: validationError || "Invalid path",
+        }, { status: 400 });
+      }
+
+      let finalPath = filePath;
+      
+      // If direct path doesn't exist, try to find by filename
+      if (!fs.existsSync(finalPath)) {
+        const fileName = path.basename(decodedPath);
+        const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+        if (found) {
+          const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+          const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+          if (foundValidation.valid && foundValidation.filePath) {
+            finalPath = foundValidation.filePath;
+          } else {
+            finalPath = found;
+          }
+        } else {
+          return Response.json({
+            success: false,
+            error: "Image not found",
+          }, { status: 404 });
+        }
+      }
+
+      if (!fs.existsSync(finalPath)) {
+        return Response.json({
+          success: false,
+          error: "Image not found",
+        }, { status: 404 });
+      }
+
+      const body = await request.json();
+      const relativePathForMetadata = path.relative(CONSTANTS.OPTIMIZED_DIR, finalPath).replace(/\\/g, "/");
+      const originalPath = finalPath.replace(/optimized/g, "originals");
+      const metadata = await saveMetadata(finalPath, relativePathForMetadata, originalPath, body);
+
+      return Response.json({ success: true, metadata });
+    } catch (error) {
+      logger.error("Error saving metadata in middleware:", error);
+      return Response.json({
+        success: false,
+        error: sanitizeError(error),
+      }, { status: 500 });
+    }
+  }
+
+  // Handle metadata GET requests
+  if (metadataMatch && request.method === "GET") {
+    try {
+      const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+      
+      if (!valid || !filePath) {
+        return Response.json({
+          success: false,
+          error: validationError || "Invalid path",
+        }, { status: 400 });
+      }
+
+      let finalPath = filePath;
+      
+      // If direct path doesn't exist, try to find by filename
+      if (!fs.existsSync(finalPath)) {
+        const fileName = path.basename(decodedPath);
+        const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+        if (found) {
+          const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+          const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+          if (foundValidation.valid && foundValidation.filePath) {
+            finalPath = foundValidation.filePath;
+          } else {
+            finalPath = found;
+          }
+        } else {
+          return Response.json({
+            success: false,
+            error: "Image not found",
+          }, { status: 404 });
+        }
+      }
+
+      const relativePathForMetadata = path.relative(CONSTANTS.OPTIMIZED_DIR, finalPath).replace(/\\/g, "/");
+      const originalPath = finalPath.replace(/optimized/g, "originals");
+      const metadata = loadMetadata(finalPath, relativePathForMetadata, originalPath);
+
+      return Response.json({ success: true, metadata });
+    } catch (error) {
+      logger.error("Error loading metadata in middleware:", error);
+      return Response.json({
+        success: false,
+        error: sanitizeError(error),
+      }, { status: 500 });
+    }
+  }
+
+  // Handle rename POST requests
+  if (renameMatch && request.method === "POST") {
+    try {
+      const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+      
+      if (!valid || !filePath) {
+        return Response.json({
+          success: false,
+          error: validationError || "Invalid path",
+        }, { status: 400 });
+      }
+
+      let finalPath = filePath;
+      
+      // If direct path doesn't exist, try to find by filename
+      if (!fs.existsSync(finalPath)) {
+        const fileName = path.basename(decodedPath);
+        const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+        if (found) {
+          const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+          const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+          if (foundValidation.valid && foundValidation.filePath) {
+            finalPath = foundValidation.filePath;
+          } else {
+            finalPath = found;
+          }
+        } else {
+          return Response.json({
+            success: false,
+            error: "Image not found",
+          }, { status: 404 });
+        }
+      }
+
+      if (!fs.existsSync(finalPath)) {
+        return Response.json({
+          success: false,
+          error: "Image not found",
+        }, { status: 404 });
+      }
+
+      const body = await request.json();
+      const { newFilename, useSEO } = body;
+
+      if (!newFilename || typeof newFilename !== "string") {
+        return Response.json({
+          success: false,
+          error: "newFilename is required and must be a string",
+        }, { status: 400 });
+      }
+
+      // Validate new filename
+      if (!isImageFile(newFilename)) {
+        return Response.json({
+          success: false,
+          error: "New filename must have a valid image extension",
+        }, { status: 400 });
+      }
+
+      let finalFilename = newFilename.trim();
+      
+      // Get current relativePath for metadata lookup
+      const currentRelativePath = path.relative(CONSTANTS.OPTIMIZED_DIR, finalPath).replace(/\\/g, "/");
+      
+      // Generate SEO filename if requested
+      if (useSEO) {
+        const originalPath = finalPath.replace(/optimized/g, "originals").replace(/\.(webp|jpeg)$/i, path.extname(finalPath) || ".jpg");
+        const metadata = loadMetadata(finalPath, currentRelativePath, originalPath);
+        const baseName = path.parse(newFilename).name;
+        const ext = path.parse(newFilename).ext || path.extname(finalPath);
+        const seoName = generateSEOFilename(baseName, metadata?.title, metadata?.altText);
+        finalFilename = `${seoName}${ext}`;
+      }
+
+      const newPath = await renameImage(finalPath, finalFilename, currentRelativePath);
+      
+      // Invalidate cache for old and new paths
+      invalidateImageCache(finalPath);
+      invalidateImageCache(newPath);
+      
+      const newRelativePath = path.relative(CONSTANTS.OPTIMIZED_DIR, newPath).replace(/\\/g, "/");
+
+      return Response.json({
+        success: true,
+        newPath: newRelativePath,
+        downloadUrl: `/download/${newRelativePath}`,
+        previewUrl: `/api/images/${encodeURIComponent(newRelativePath)}/preview`,
+      });
+    } catch (error) {
+      logger.error("Error renaming image in middleware:", error);
+      return Response.json({
+        success: false,
+        error: sanitizeError(error),
+      }, { status: 500 });
+    }
+  }
+
+  // Return undefined to let normal routing handle other cases
+  return undefined;
+});
 
 // IMPORTANT: Route registration order matters in Elysia
 // More specific routes must be registered BEFORE wildcard routes
@@ -717,6 +1004,125 @@ app.post("/api/images/*/rename", async (context) => {
     }
 });
 
+// Delete single image
+app.delete("/api/images/*", async (context) => {
+  try {
+    const wildcard = context.params["*"] as string;
+    if (!wildcard) {
+      return Response.json({
+        success: false,
+        error: "Image path required",
+      }, { status: 400 });
+    }
+
+    const decodedPath = decodeURIComponent(wildcard);
+    const { valid, filePath, error } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+
+    if (!valid || !filePath || !fs.existsSync(filePath)) {
+      return Response.json({
+        success: false,
+        error: error || "Invalid path or file not found",
+      }, { status: 400 });
+    }
+
+    // Delete optimized image
+    fs.unlinkSync(filePath);
+    
+    // Delete metadata
+    const metadataPath = getMetadataPath(filePath);
+    if (fs.existsSync(metadataPath)) {
+      fs.unlinkSync(metadataPath);
+    }
+    
+    // Delete original if it exists
+    const originalPath = filePath.replace(/optimized/g, "originals");
+    if (fs.existsSync(originalPath)) {
+      fs.unlinkSync(originalPath);
+    }
+    
+    // Invalidate cache
+    invalidateImageCache(filePath);
+
+    return Response.json({ success: true });
+  } catch (error) {
+    logger.error("Error deleting image:", error);
+    return Response.json({
+      success: false,
+      error: sanitizeError(error),
+    }, { status: 500 });
+  }
+});
+
+// Bulk delete images
+app.delete("/api/images/bulk", async (context) => {
+  try {
+    const body = await context.request.json();
+    const { relativePaths } = body;
+
+    if (!Array.isArray(relativePaths) || relativePaths.length === 0) {
+      return Response.json({ success: false, error: "relativePaths array is required" }, { status: 400 });
+    }
+    
+    const results = [];
+    for (const relativePath of relativePaths) {
+      try {
+        const decodedPath = decodeURIComponent(relativePath);
+        let { valid, filePath, error } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+
+        // If validation fails or file doesn't exist, try to find by filename
+        if (!valid || !filePath || !fs.existsSync(filePath)) {
+          const fileName = path.basename(decodedPath);
+          const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+          if (found) {
+            // Validate the found path
+            const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found).replace(/\\/g, "/");
+            const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+            if (foundValidation.valid && foundValidation.filePath && fs.existsSync(foundValidation.filePath)) {
+              filePath = foundValidation.filePath;
+              valid = true;
+              error = undefined;
+            } else if (fs.existsSync(found)) {
+              // Use found path directly as fallback
+              filePath = found;
+              valid = true;
+              error = undefined;
+            }
+          }
+        }
+
+        if (!valid || !filePath || !fs.existsSync(filePath)) {
+          results.push({ relativePath, success: false, error: error || "Invalid path or file not found" });
+          continue;
+        }
+
+        fs.unlinkSync(filePath);
+        const metadataPath = getMetadataPath(filePath);
+        if (fs.existsSync(metadataPath)) {
+          fs.unlinkSync(metadataPath);
+        }
+        const originalPath = filePath.replace(/optimized/g, "originals");
+        if (fs.existsSync(originalPath)) {
+          fs.unlinkSync(originalPath);
+        }
+        invalidateImageCache(filePath);
+        results.push({ relativePath, success: true });
+      } catch (error) {
+        results.push({ relativePath, success: false, error: sanitizeError(error) });
+      }
+    }
+
+    return Response.json({
+      success: true,
+      results,
+      deleted: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+    });
+  } catch (error) {
+    logger.error("Error in bulk delete:", error);
+    return Response.json({ success: false, error: sanitizeError(error) }, { status: 500 });
+  }
+});
+
 // Export images for WordPress
 app.get("/api/images/export/wordpress", async () => {
   try {
@@ -734,37 +1140,89 @@ app.get("/api/images/export/wordpress", async () => {
           });
         }
 
-        // WordPress format
+        // WordPress import format (WP All Import / Ultimate CSV Importer compatible)
+        // Generate absolute URL if BASE_URL is configured, otherwise use relative path
+        const relativeUrl = `/download/${img.relativePath}`;
+        const fileUrl = config.baseUrl 
+          ? `${config.baseUrl.replace(/\/$/, "")}${relativeUrl}` 
+          : relativeUrl;
+        const filePath = img.path;
+        
         return {
-          filename: metadata.filename,
-          title: metadata.title || path.parse(metadata.filename).name,
-          alt_text: metadata.altText || metadata.title || path.parse(metadata.filename).name,
+          // Required for import plugins
+          file_path: filePath, // Absolute file path for local imports (use this if uploading files directly)
+          file_url: fileUrl,   // Absolute or relative URL (use relative if BASE_URL not set, will need to be replaced)
+          file_url_relative: relativeUrl, // Always relative path for reference/replacement
+          title: metadata.title || "",
+          alt_text: metadata.altText || metadata.title || "",
           caption: metadata.caption || "",
           description: metadata.description || "",
-          url: `/download/${img.relativePath}`,
-          width: metadata.width,
-          height: metadata.height,
-          file_size: metadata.fileSize,
+          
+          // WordPress media attachment fields
+          post_title: metadata.title || path.parse(metadata.filename).name,
+          post_excerpt: metadata.caption || "",
+          post_content: metadata.description || "",
+          post_type: "attachment",
+          
+          // Image metadata
+          width: metadata.width || 0,
+          height: metadata.height || 0,
+          file_size: metadata.fileSize || 0,
+          
+          // Additional metadata (as custom fields)
           keywords: (metadata.keywords || []).join(", "),
+          filename: metadata.filename,
         };
       })
     );
 
-    // Return as CSV for easy import
-    const csvHeaders = ["filename", "title", "alt_text", "caption", "description", "url", "width", "height", "file_size", "keywords"];
+    // Return as CSV - WordPress import plugin compatible format
+    // WP All Import / Ultimate CSV Importer standard columns
+    const csvHeaders = [
+      "file_path",
+      "file_url",
+      "file_url_relative",
+      "filename",
+      "title",
+      "post_title",
+      "alt_text",
+      "caption",
+      "post_excerpt",
+      "description",
+      "post_content",
+      "post_type",
+      "width",
+      "height",
+      "file_size",
+      "keywords"
+    ];
     const csvRows = imagesWithMetadata.map((img) =>
       csvHeaders.map((header) => {
         const value = img[header as keyof typeof img];
-        return typeof value === "string" && value.includes(",") ? `"${value.replace(/"/g, '""')}"` : value;
+        // Handle undefined/null values
+        if (value === undefined || value === null) {
+          return "";
+        }
+        // Convert to string and escape commas/quotes for CSV
+        const stringValue = String(value);
+        // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+        if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
       }).join(",")
     );
 
     const csv = [csvHeaders.join(","), ...csvRows].join("\n");
 
-    return new Response(csv, {
+    // Add BOM for Excel compatibility (UTF-8 with BOM)
+    const bom = "\uFEFF";
+    const csvWithBom = bom + csv;
+
+    return new Response(csvWithBom, {
       headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": 'attachment; filename="wordpress-import.csv"',
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="wordpress-media-import.csv"',
       },
     });
   } catch (error) {
@@ -909,6 +1367,8 @@ logger.info("  GET  /api/images/*/metadata - Get image metadata");
 logger.info("  PUT  /api/images/*/metadata - Update metadata");
 logger.info("  GET  /api/images/*/preview - Get thumbnail");
 logger.info("  POST /api/images/*/rename - Rename image");
-logger.info("  GET  /api/images/export/wordpress - Export CSV");
-logger.debug(`Environment: ${config.nodeEnv}, Log Level: ${config.logLevel}`);
+    logger.info("  GET  /api/images/export/wordpress - Export CSV");
+    logger.info("  DELETE /api/images/* - Delete single image");
+    logger.info("  DELETE /api/images/bulk - Bulk delete images");
+    logger.debug(`Environment: ${config.nodeEnv}, Log Level: ${config.logLevel}`);
 

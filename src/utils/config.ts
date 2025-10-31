@@ -25,6 +25,10 @@ export const config = {
   originalsDir: process.env.ORIGINALS_DIR || "originals",
   metadataDir: process.env.METADATA_DIR || ".metadata",
   
+  // Base URL for generating absolute URLs (for WordPress exports, etc.)
+  // Set this to your site URL, e.g., "https://example.com" or "https://your-site.railway.app"
+  baseUrl: process.env.BASE_URL || process.env.SITE_URL || "",
+  
   // Request timeout (ms)
   requestTimeout: Number(process.env.REQUEST_TIMEOUT) || 300000, // 5 minutes
 } as const;

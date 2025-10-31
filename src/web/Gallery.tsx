@@ -119,12 +119,14 @@ export default function Gallery() {
   const [renaming, setRenaming] = useState(false);
   const [newFilename, setNewFilename] = useState("");
   const [useSEO, setUseSEO] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadImages();
   }, []);
 
-  const loadImages = async () => {
+  const loadImages = async (): Promise<ImageMetadata[]> => {
     setLoading(true);
     try {
       const res = await fetch("/api/images");
@@ -143,21 +145,25 @@ export default function Gallery() {
         }
         console.error("Error loading images:", errorMessage);
         setImages([]); // Set empty array on error
-        return;
+        return [];
       }
       const data: ImagesResponse = await res.json();
       if (data.success) {
-        setImages(data.images || []);
+        const loadedImages = data.images || [];
+        setImages(loadedImages);
         if (data.message && import.meta.env.DEV) {
           console.info(data.message);
         }
+        return loadedImages;
       } else {
         console.error("Error loading images:", data.error || "Unknown error");
         setImages([]);
+        return [];
       }
     } catch (error) {
       console.error("Error loading images:", error);
       setImages([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -263,8 +269,30 @@ export default function Gallery() {
       
       const data = await res.json();
       if (data.success) {
-        await loadImages();
-        setSelectedImage(data.metadata);
+        // Reload images to get updated data
+        const loadedImages = await loadImages();
+        // Find the updated image from the reloaded list to ensure consistency
+        const updatedImage = loadedImages.find(img => img.relativePath === selectedImage.relativePath);
+        if (updatedImage) {
+          setSelectedImage(updatedImage);
+          setEditingMetadata({
+            title: updatedImage.title || "",
+            altText: updatedImage.altText || "",
+            description: updatedImage.description || "",
+            caption: updatedImage.caption || "",
+            keywords: updatedImage.keywords || [],
+          });
+        } else {
+          // Fallback to response metadata if image not found in list
+          setSelectedImage(data.metadata);
+          setEditingMetadata({
+            title: data.metadata.title || "",
+            altText: data.metadata.altText || "",
+            description: data.metadata.description || "",
+            caption: data.metadata.caption || "",
+            keywords: data.metadata.keywords || [],
+          });
+        }
         alert("Metadata saved successfully!");
       } else {
         alert(data.error || "Error saving metadata");
@@ -315,6 +343,116 @@ export default function Gallery() {
     window.location.href = "/api/images/export/wordpress";
   };
 
+  const toggleImageSelection = (relativePath: string) => {
+    setSelectedForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(relativePath)) {
+        next.delete(relativePath);
+      } else {
+        next.add(relativePath);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedForDelete.size === images.length) {
+      setSelectedForDelete(new Set());
+    } else {
+      setSelectedForDelete(new Set(images.map(img => img.relativePath)));
+    }
+  };
+
+  const deleteSelectedImages = async () => {
+    if (selectedForDelete.size === 0) return;
+    
+    const count = selectedForDelete.size;
+    if (!confirm(`Are you sure you want to delete ${count} image${count > 1 ? 's' : ''}? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeleting(true);
+    try {
+      const relativePaths = Array.from(selectedForDelete);
+      
+      // Use bulk delete endpoint for better reliability
+      const res = await fetch("/api/images/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ relativePaths }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(errorData.error || `Failed to delete images`);
+      }
+      
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Bulk delete failed");
+      }
+      
+      const { deleted, failed, results } = data;
+      
+      // Show results
+      if (failed > 0) {
+        const failedItems = results.filter((r: any) => !r.success);
+        const failedMessages = failedItems.map((f: any) => `${f.relativePath}: ${f.error || 'Unknown error'}`).join('\n');
+        alert(`Deleted ${deleted} of ${count} image(s).\n\nFailed to delete ${failed} image(s):\n${failedMessages}`);
+      } else {
+        alert(`Successfully deleted ${deleted} image${deleted > 1 ? 's' : ''}!`);
+      }
+      
+      // Clear selection and reload images
+      setSelectedForDelete(new Set());
+      if (selectedImage && selectedForDelete.has(selectedImage.relativePath)) {
+        setSelectedImage(null);
+      }
+      await loadImages();
+    } catch (error) {
+      console.error("Error deleting images:", error);
+      const errorMessage = error instanceof Error ? error.message : "Error deleting images";
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const deleteImage = async (image: ImageMetadata) => {
+    if (!confirm(`Are you sure you want to delete "${image.filename}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/images/${encodeURIComponent(image.relativePath)}`, {
+        method: "DELETE",
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        alert(errorData.error || "Error deleting image");
+        return;
+      }
+      
+      const data = await res.json();
+      if (data.success) {
+        await loadImages();
+        if (selectedImage?.relativePath === image.relativePath) {
+          setSelectedImage(null);
+        }
+        alert("Image deleted successfully!");
+      } else {
+        alert(data.error || "Error deleting image");
+      }
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      alert("Error deleting image");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4">
@@ -323,10 +461,48 @@ export default function Gallery() {
             <h1 className="text-3xl font-bold text-gray-900">Image Gallery & Management</h1>
             <p className="text-gray-600 mt-1">Preview, edit metadata, and prepare images for WordPress</p>
           </div>
-          <Button onClick={exportWordPress} type="primary">
-            Export for WordPress
-          </Button>
+          <div className="flex gap-3">
+            {selectedForDelete.size > 0 && (
+              <>
+                <Button 
+                  onClick={deleteSelectedImages} 
+                  type="danger"
+                  disabled={deleting}
+                  loading={deleting}
+                >
+                  Delete Selected ({selectedForDelete.size})
+                </Button>
+                <Button 
+                  onClick={() => setSelectedForDelete(new Set())} 
+                  type="default"
+                  disabled={deleting}
+                >
+                  Clear Selection
+                </Button>
+              </>
+            )}
+            <Button onClick={exportWordPress} type="primary">
+              Export for WordPress
+            </Button>
+          </div>
         </div>
+
+        {/* Select All / Deselect All */}
+        {images.length > 0 && (
+          <div className="mb-4 flex items-center gap-3">
+            <button
+              onClick={toggleSelectAll}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              {selectedForDelete.size === images.length ? "Deselect All" : "Select All"}
+            </button>
+            {selectedForDelete.size > 0 && (
+              <span className="text-sm text-gray-600">
+                {selectedForDelete.size} of {images.length} selected
+              </span>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-12">
@@ -349,10 +525,29 @@ export default function Gallery() {
                       className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                         selectedImage?.relativePath === image.relativePath
                           ? "border-green-500 ring-2 ring-green-200"
+                          : selectedForDelete.has(image.relativePath)
+                          ? "border-red-500 ring-2 ring-red-200"
                           : "border-gray-200 hover:border-gray-300"
                       }`}
                     >
-                      <div className="aspect-square bg-gray-100 relative">
+                      <div className="aspect-square bg-gray-100 relative group">
+                        {/* Checkbox */}
+                        <div 
+                          className="absolute top-2 left-2 z-20 bg-white rounded shadow-md p-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleImageSelection(image.relativePath);
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedForDelete.has(image.relativePath)}
+                            onChange={() => toggleImageSelection(image.relativePath)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500 cursor-pointer accent-red-600"
+                            style={{ cursor: "pointer" }}
+                          />
+                        </div>
                         <img
                           src={image.previewUrl}
                           alt={image.altText || image.filename}
@@ -472,15 +667,27 @@ export default function Gallery() {
                         placeholder="Detailed description"
                       />
 
-                      <Input
-                        label="Keywords (comma-separated)"
-                        value={Array.isArray(editingMetadata.keywords) ? editingMetadata.keywords.join(", ") : ""}
-                        onChange={(e) => {
-                          const keywords = e.target.value.split(",").map(k => k.trim()).filter(k => k);
-                          setEditingMetadata({ ...editingMetadata, keywords });
-                        }}
-                        placeholder="keyword1, keyword2, keyword3"
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
+                        <input
+                          type="text"
+                          value={Array.isArray(editingMetadata.keywords) ? editingMetadata.keywords.join(", ") : (typeof editingMetadata.keywords === "string" ? editingMetadata.keywords : "")}
+                          onChange={(e) => {
+                            // Store as string while typing to allow commas
+                            const keywordsString = e.target.value;
+                            setEditingMetadata({ ...editingMetadata, keywords: keywordsString });
+                          }}
+                          onBlur={(e) => {
+                            // Parse into array on blur
+                            const keywordsString = e.target.value;
+                            const keywords = keywordsString.split(",").map(k => k.trim()).filter(k => k);
+                            setEditingMetadata({ ...editingMetadata, keywords });
+                          }}
+                          placeholder="keyword1, keyword2, keyword3"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Separate keywords with commas</p>
+                      </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Filename</label>

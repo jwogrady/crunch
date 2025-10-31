@@ -1,6 +1,6 @@
 {
   "name": "bun-image-optimizer",
-  "version": "0.1.1-alpha.1",
+  "version": "0.1.2-alpha.1",
   "description": "Image optimization app using Bun and Supabase UI",
   "type": "module",
   "repository": {

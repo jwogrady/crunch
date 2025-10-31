@@ -159,6 +159,7 @@ NODE_ENV=development
 LOG_LEVEL=DEBUG
 MAX_FILE_SIZE=52428800
 MAX_FILES_PER_REQUEST=20
+BASE_URL=https://crunch.up.railway.app  # For WordPress export absolute URLs
 ```
 
 See `src/utils/config.ts` for all configuration options.

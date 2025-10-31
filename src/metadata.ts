@@ -46,10 +46,31 @@ function ensureMetadataDir(): void {
 
 /**
  * Get metadata file path for an image
+ * Normalizes paths to ensure consistency between absolute and relative paths
  */
-function getMetadataPath(imagePath: string): string {
+export function getMetadataPath(imagePath: string): string {
   ensureMetadataDir();
-  const hash = Buffer.from(imagePath).toString("base64").replace(/[/+=]/g, "");
+  
+  // Normalize the path: always use relative path from optimized directory for consistency
+  let normalizedPath: string;
+  if (path.isAbsolute(imagePath)) {
+    // Convert absolute path to relative path from optimized directory
+    const optimizedAbs = path.resolve("optimized");
+    if (imagePath.startsWith(optimizedAbs)) {
+      normalizedPath = path.relative(optimizedAbs, imagePath);
+    } else {
+      // If not in optimized, use the absolute path (shouldn't happen normally)
+      normalizedPath = imagePath;
+    }
+  } else {
+    // Remove "optimized/" prefix if present to ensure consistency
+    normalizedPath = imagePath.replace(/^optimized[\/\\]/, "");
+  }
+  
+  // Normalize separators and ensure consistent format
+  normalizedPath = normalizedPath.replace(/\\/g, "/");
+  
+  const hash = Buffer.from(normalizedPath).toString("base64").replace(/[/+=]/g, "");
   return path.join(METADATA_DIR, `${hash}.json`);
 }
 
@@ -153,15 +174,40 @@ export async function saveMetadata(
     };
   }
 
-  // Merge with new metadata
+  // Merge with new metadata - filter out undefined/null values to preserve existing
+  const cleanMetadata: Partial<ImageMetadata> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value !== undefined && value !== null) {
+      // Handle keywords: ensure it's always an array if provided
+      if (key === "keywords") {
+        if (Array.isArray(value)) {
+          cleanMetadata.keywords = value.filter(k => k && k.trim());
+        } else if (typeof value === "string") {
+          // Support comma-separated string as input
+          cleanMetadata.keywords = value.split(",").map(k => k.trim()).filter(k => k);
+        } else {
+          cleanMetadata.keywords = [];
+        }
+      } else {
+        cleanMetadata[key as keyof ImageMetadata] = value as any;
+      }
+    }
+  }
+
+  // Merge with existing
   const updated: ImageMetadata = {
     ...existing,
-    ...metadata,
+    ...cleanMetadata,
     updatedAt: new Date().toISOString(),
-    filename: metadata.filename || existing.filename,
+    filename: cleanMetadata.filename || existing.filename,
     path: imagePath,
     relativePath,
   };
+  
+  // Ensure keywords is always an array (never undefined)
+  if (!updated.keywords || !Array.isArray(updated.keywords)) {
+    updated.keywords = [];
+  }
 
   // Save to file
   const metadataPath = getMetadataPath(imagePath);
