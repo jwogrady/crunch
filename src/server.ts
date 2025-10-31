@@ -588,19 +588,12 @@ app.get("/api/images/*/preview", async (context) => {
         }
       } else {
         logger.warn(`Preview image not found: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
-        // Return a transparent 1x1 PNG as placeholder instead of 404
-        // This prevents broken image icons and allows the onError handler to show placeholder
-        const transparentPng = Buffer.from(
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-          "base64"
-        );
-        return new Response(transparentPng, {
-          headers: {
-            "Content-Type": "image/png",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "X-Image-Missing": "true",
-          },
-        });
+        // Return 404 so img onError handler can show placeholder UI
+        // The frontend has onError handlers that display "No Preview" placeholders
+        return Response.json({
+          success: false,
+          error: "Image not found",
+        }, { status: 404 });
       }
     }
     
