@@ -159,21 +159,52 @@ export default function Gallery() {
     
     // Load full metadata
     try {
-      const res = await fetch(`/api/images/${encodeURIComponent(image.relativePath)}/metadata`);
+      const url = `/api/images/${encodeURIComponent(image.relativePath)}/metadata`;
+      if (import.meta.env.DEV) {
+        console.debug("Fetching metadata from:", url);
+      }
+      const res = await fetch(url);
+      
+      // Check content type to determine if response is JSON
+      const contentType = res.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+      
       if (!res.ok) {
-        // If response is not OK, try to get error message
-        const errorText = await res.text();
-        console.error("Error loading metadata:", res.status, errorText);
+        let errorMessage = `HTTP ${res.status}`;
+        try {
+          if (isJson) {
+            const errorData = await res.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } else {
+            const errorText = await res.text();
+            errorMessage = errorText || errorMessage;
+          }
+        } catch (e) {
+          // If we can't parse the error, use the status
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        }
+        console.error("Error loading metadata:", errorMessage);
+        // Don't return early - the initial image data is still valid
         return;
       }
+      
+      if (!isJson) {
+        console.warn("Metadata endpoint returned non-JSON response");
+        return;
+      }
+      
       const data = await res.json();
       if (data.success && data.metadata) {
         setSelectedImage(data.metadata);
+        if (import.meta.env.DEV) {
+          console.debug("Metadata loaded successfully");
+        }
       } else {
         console.error("Error loading metadata:", data.error || "Unknown error");
       }
     } catch (error) {
       console.error("Error loading metadata:", error);
+      // Don't throw - the initial image data is still valid
     }
   };
 

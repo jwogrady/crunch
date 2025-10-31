@@ -313,28 +313,29 @@ app.get("/api/images/*/metadata", async (context) => {
   try {
     const wildcard = context.params["*"] as string;
     if (!wildcard) {
-      return {
+      return Response.json({
         success: false,
         error: "Image path required",
-      };
+      }, { status: 400 });
     }
     
     const decodedPath = decodeURIComponent(wildcard);
-    logger.debug(`Metadata request - path: ${decodedPath}`);
+    logger.debug(`Metadata request - wildcard: ${wildcard}, decoded: ${decodedPath}`);
     
     // Use validateImagePath for security and proper path resolution
     const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
     
     if (!valid || !filePath) {
       logger.warn(`Invalid path for metadata: ${decodedPath}`, validationError);
-      return {
+      return Response.json({
         success: false,
         error: validationError || "Invalid path",
-      };
+      }, { status: 400 });
     }
 
     // Try direct path first
     let finalPath = path.resolve(filePath);
+    logger.debug(`Looking for metadata at: ${finalPath}`);
     
     // If direct path doesn't exist, try to find by filename (backwards compatibility)
     if (!fs.existsSync(finalPath)) {
@@ -349,17 +350,25 @@ app.get("/api/images/*/metadata", async (context) => {
           logger.debug(`Found image for metadata at: ${finalPath}`);
         } else {
           logger.warn(`Found file but validation failed: ${found}`);
-          return {
+          return Response.json({
             success: false,
             error: "Image not found",
-          };
+          }, { status: 404 });
         }
       } else {
         logger.warn(`Image not found for metadata: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
-        return {
+        // Check if optimized directory even exists
+        if (!fs.existsSync(CONSTANTS.OPTIMIZED_DIR)) {
+          logger.error(`Optimized directory does not exist: ${CONSTANTS.OPTIMIZED_DIR}`);
+          return Response.json({
+            success: false,
+            error: "Optimized directory not found. Please upload images first.",
+          }, { status: 404 });
+        }
+        return Response.json({
           success: false,
           error: "Image not found",
-        };
+        }, { status: 404 });
       }
     }
     
@@ -379,16 +388,16 @@ app.get("/api/images/*/metadata", async (context) => {
       });
     }
 
-    return {
+    return Response.json({
       success: true,
       metadata,
-    };
+    });
   } catch (error) {
     logger.error("Error getting metadata:", error);
-    return {
+    return Response.json({
       success: false,
       error: sanitizeError(error),
-    };
+    }, { status: 500 });
   }
 });
 
