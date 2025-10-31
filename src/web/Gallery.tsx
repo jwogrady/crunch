@@ -128,9 +128,16 @@ export default function Gallery() {
     setLoading(true);
     try {
       const res = await fetch("/api/images");
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Error loading images:", res.status, errorText);
+        return;
+      }
       const data: ImagesResponse = await res.json();
       if (data.success && data.images) {
         setImages(data.images);
+      } else {
+        console.error("Error loading images:", data.error || "Unknown error");
       }
     } catch (error) {
       console.error("Error loading images:", error);
@@ -214,6 +221,13 @@ export default function Gallery() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newFilename, useSEO }),
       });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Error renaming image:", res.status, errorText);
+        alert(`Error renaming image: ${errorText}`);
+        return;
+      }
       
       const data = await res.json();
       if (data.success) {
