@@ -13,15 +13,29 @@ export function validateImagePath(
     return { valid: false, error: "Invalid path: directory traversal detected" };
   }
 
+  // Normalize path: remove baseDir prefix if present
+  let normalizedPath = relativePath.replace(/\\/g, "/");
+  const baseDirNormalized = baseDir.replace(/\\/g, "/");
+  
+  // Remove leading baseDir if present (handles both "optimized/" and "optimized\")
+  if (normalizedPath.toLowerCase().startsWith(baseDirNormalized.toLowerCase() + "/")) {
+    normalizedPath = normalizedPath.substring(baseDirNormalized.length + 1);
+  } else if (normalizedPath.toLowerCase().startsWith(baseDirNormalized.toLowerCase())) {
+    normalizedPath = normalizedPath.substring(baseDirNormalized.length);
+  }
+  
+  // Remove any leading slashes after normalization
+  normalizedPath = normalizedPath.replace(/^\/+/, "");
+
   // Sanitize path
-  const sanitized = sanitizePath(relativePath);
+  const sanitized = sanitizePath(normalizedPath);
   
   // Double-check after sanitization
   if (sanitized.includes("..") || sanitized.startsWith("/")) {
     return { valid: false, error: "Invalid path: directory traversal detected" };
   }
 
-  // Join with baseDir - sanitized path is relative
+  // Join with baseDir - sanitized path is relative to baseDir
   const filePath = path.join(baseDir, sanitized);
   
   // Resolve to absolute path for security check
