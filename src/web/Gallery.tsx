@@ -129,24 +129,42 @@ export default function Gallery() {
     try {
       const res = await fetch("/api/images");
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Error loading images:", res.status, errorText);
+        const contentType = res.headers.get("content-type") || "";
+        let errorMessage = `HTTP ${res.status}`;
+        try {
+          if (contentType.includes("application/json")) {
+            const errorData = await res.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } else {
+            errorMessage = await res.text() || errorMessage;
+          }
+        } catch (e) {
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+        }
+        console.error("Error loading images:", errorMessage);
+        setImages([]); // Set empty array on error
         return;
       }
       const data: ImagesResponse = await res.json();
-      if (data.success && data.images) {
-        setImages(data.images);
+      if (data.success) {
+        setImages(data.images || []);
+        if (data.message && import.meta.env.DEV) {
+          console.info(data.message);
+        }
       } else {
         console.error("Error loading images:", data.error || "Unknown error");
+        setImages([]);
       }
     } catch (error) {
       console.error("Error loading images:", error);
+      setImages([]);
     } finally {
       setLoading(false);
     }
   };
 
   const selectImage = async (image: ImageMetadata) => {
+    // Set initial image data immediately (from the list)
     setSelectedImage(image);
     setEditingMetadata({
       title: image.title || "",
@@ -157,11 +175,18 @@ export default function Gallery() {
     });
     setNewFilename(image.filename);
     
-    // Load full metadata
+    // Skip metadata fetch if image has an error flag (from list)
+    if ((image as any).error) {
+      console.warn("Skipping metadata fetch for image with error:", (image as any).error);
+      return;
+    }
+    
+    // Load full metadata (optional - only for enhanced data)
+    // If this fails, we still have the basic image data from the list
     try {
       const url = `/api/images/${encodeURIComponent(image.relativePath)}/metadata`;
       if (import.meta.env.DEV) {
-        console.debug("Fetching metadata from:", url);
+        console.debug("Fetching metadata from:", url, "for image:", image.relativePath);
       }
       const res = await fetch(url);
       
@@ -183,8 +208,11 @@ export default function Gallery() {
           // If we can't parse the error, use the status
           errorMessage = `HTTP ${res.status}: ${res.statusText}`;
         }
-        console.error("Error loading metadata:", errorMessage);
-        // Don't return early - the initial image data is still valid
+        // Only log warning, not error - we have basic image data from list
+        if (import.meta.env.DEV) {
+          console.warn("Could not load full metadata (using basic data):", errorMessage);
+        }
+        // Keep the initial image data - don't clear selectedImage
         return;
       }
       
@@ -195,15 +223,22 @@ export default function Gallery() {
       
       const data = await res.json();
       if (data.success && data.metadata) {
-        setSelectedImage(data.metadata);
+        // Merge enhanced metadata with existing data
+        setSelectedImage({ ...image, ...data.metadata });
         if (import.meta.env.DEV) {
           console.debug("Metadata loaded successfully");
         }
       } else {
-        console.error("Error loading metadata:", data.error || "Unknown error");
+        if (import.meta.env.DEV) {
+          console.warn("Metadata response indicated failure:", data.error || "Unknown error");
+        }
+        // Keep the initial image data
       }
     } catch (error) {
-      console.error("Error loading metadata:", error);
+      // Network errors, etc. - keep the initial image data
+      if (import.meta.env.DEV) {
+        console.warn("Error fetching metadata (using basic data):", error);
+      }
       // Don't throw - the initial image data is still valid
     }
   };

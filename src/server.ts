@@ -271,40 +271,75 @@ app.get("/download-all", async () => {
 // List all images with metadata
 app.get("/api/images", async () => {
   try {
+    // Check if optimized directory exists
+    if (!fs.existsSync(CONSTANTS.OPTIMIZED_DIR)) {
+      logger.debug(`Optimized directory does not exist: ${CONSTANTS.OPTIMIZED_DIR}`);
+      return Response.json({
+        success: true,
+        images: [],
+        count: 0,
+        message: "No images uploaded yet. Upload images to get started.",
+      });
+    }
+
     const images = getAllImages();
+    logger.debug(`Found ${images.length} images in optimized directory`);
+
+    if (images.length === 0) {
+      return Response.json({
+        success: true,
+        images: [],
+        count: 0,
+        message: "No images found. Upload and optimize images first.",
+      });
+    }
+
     const imagesWithMetadata = await Promise.all(
       images.map(async (img) => {
-        let metadata = loadMetadata(img.path, img.relativePath, img.originalPath);
-        
-        // If no metadata exists, create it
-        if (!metadata) {
-          const { saveMetadata, extractImageMetadata } = await import("./metadata");
-          const technical = await extractImageMetadata(img.path, img.relativePath, img.originalPath);
-          metadata = await saveMetadata(img.path, img.relativePath, img.originalPath, {
-            filename: path.basename(img.path),
-            ...technical,
-          });
-        }
+        try {
+          let metadata = loadMetadata(img.path, img.relativePath, img.originalPath);
+          
+          // If no metadata exists, create it
+          if (!metadata) {
+            const { saveMetadata, extractImageMetadata } = await import("./metadata");
+            const technical = await extractImageMetadata(img.path, img.relativePath, img.originalPath);
+            metadata = await saveMetadata(img.path, img.relativePath, img.originalPath, {
+              filename: path.basename(img.path),
+              ...technical,
+            });
+          }
 
-        return {
-          ...metadata,
-          previewUrl: `/api/images/${encodeURIComponent(img.relativePath)}/preview`,
-          downloadUrl: `/download/${img.relativePath}`,
-        };
+          return {
+            ...metadata,
+            previewUrl: `/api/images/${encodeURIComponent(img.relativePath)}/preview`,
+            downloadUrl: `/download/${img.relativePath}`,
+          };
+        } catch (error) {
+          logger.error(`Error processing image ${img.path}:`, error);
+          // Return basic info even if metadata extraction fails
+          return {
+            filename: path.basename(img.path),
+            relativePath: img.relativePath,
+            path: img.path,
+            previewUrl: `/api/images/${encodeURIComponent(img.relativePath)}/preview`,
+            downloadUrl: `/download/${img.relativePath}`,
+            error: sanitizeError(error),
+          };
+        }
       })
     );
 
-    return {
+    return Response.json({
       success: true,
       images: imagesWithMetadata,
       count: imagesWithMetadata.length,
-    };
+    });
   } catch (error) {
     logger.error("Error listing images:", error);
-    return {
+    return Response.json({
       success: false,
       error: sanitizeError(error),
-    };
+    }, { status: 500 });
   }
 });
 
