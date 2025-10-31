@@ -153,9 +153,17 @@ export default function Gallery() {
     // Load full metadata
     try {
       const res = await fetch(`/api/images/${encodeURIComponent(image.relativePath)}/metadata`);
+      if (!res.ok) {
+        // If response is not OK, try to get error message
+        const errorText = await res.text();
+        console.error("Error loading metadata:", res.status, errorText);
+        return;
+      }
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.metadata) {
         setSelectedImage(data.metadata);
+      } else {
+        console.error("Error loading metadata:", data.error || "Unknown error");
       }
     } catch (error) {
       console.error("Error loading metadata:", error);
@@ -173,11 +181,20 @@ export default function Gallery() {
         body: JSON.stringify(editingMetadata),
       });
       
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Error saving metadata:", res.status, errorText);
+        alert(`Error saving metadata: ${errorText}`);
+        return;
+      }
+      
       const data = await res.json();
       if (data.success) {
         await loadImages();
         setSelectedImage(data.metadata);
         alert("Metadata saved successfully!");
+      } else {
+        alert(data.error || "Error saving metadata");
       }
     } catch (error) {
       console.error("Error saving metadata:", error);
