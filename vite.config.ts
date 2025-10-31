@@ -12,5 +12,17 @@ export default defineConfig({
     },
   },
   root: "src/web",
+  build: {
+    rollupOptions: {
+      external: (id) => {
+        // Explicitly externalize Node.js built-in modules to prevent warnings
+        return id === "path" || id.startsWith("path/") || id === "fs" || id.startsWith("node:");
+      },
+      output: {
+        // Suppress warnings about externalized modules
+        globals: {},
+      },
+    },
+  },
 });
 
