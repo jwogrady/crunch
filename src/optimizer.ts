@@ -118,7 +118,9 @@ async function generateFormat(
 
   // Save initial metadata
   const { saveMetadata } = await import("./metadata");
-  const relativePath = path.relative("optimized", outputPath).replace(/\\/g, "/");
+  // Calculate relativePath from the outputDir (should be "optimized")
+  // Use path.relative to get path relative to optimized directory
+  const relativePath = path.relative(outputDir, outputPath).replace(/\\/g, "/");
   await saveMetadata(outputPath, relativePath, originalPath, {
     filename: `${baseName}.${format}`,
   });

@@ -461,10 +461,10 @@ app.put("/api/images/*/metadata", async (context) => {
     
     if (!valid || !filePath) {
       logger.warn(`Invalid path for metadata update: ${decodedPath}`, validationError);
-      return {
+      return Response.json({
         success: false,
         error: validationError || "Invalid path",
-      };
+      }, { status: 400 });
     }
 
     // Try direct path first
@@ -483,17 +483,17 @@ app.put("/api/images/*/metadata", async (context) => {
           logger.debug(`Found image for metadata update at: ${finalPath}`);
         } else {
           logger.warn(`Found file but validation failed: ${found}`);
-          return {
+          return Response.json({
             success: false,
             error: "Image not found",
-          };
+          }, { status: 404 });
         }
       } else {
         logger.warn(`Image not found for metadata update: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
-        return {
+        return Response.json({
           success: false,
           error: "Image not found",
-        };
+        }, { status: 404 });
       }
     }
     
@@ -517,16 +517,16 @@ app.put("/api/images/*/metadata", async (context) => {
     
     const updated = await saveMetadata(finalPath, relativePathForMetadata, originalPath, sanitizedMetadata);
 
-    return {
+    return Response.json({
       success: true,
       metadata: updated,
-    };
+    });
   } catch (error) {
     logger.error("Error updating metadata:", error);
-    return {
+    return Response.json({
       success: false,
       error: sanitizeError(error),
-    };
+    }, { status: 500 });
   }
 });
 
@@ -621,13 +621,20 @@ app.post("/api/images/*/rename", async (context) => {
     const { valid, filePath, error } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
     
     if (!valid || !filePath) {
-      return new Response(error || "Invalid path", { status: 400 });
+      return Response.json({
+        success: false,
+        error: error || "Invalid path",
+      }, { status: 400 });
     }
 
-    const fullPath = path.join(CONSTANTS.OPTIMIZED_DIR, filePath);
+    // filePath from validateImagePath is already an absolute resolved path
+    const fullPath = path.resolve(filePath);
 
     if (!fs.existsSync(fullPath)) {
-      return new Response("Image not found", { status: 404 });
+      return Response.json({
+        success: false,
+        error: "Image not found",
+      }, { status: 404 });
     }
 
     const body = await context.request.json();
@@ -650,16 +657,20 @@ app.post("/api/images/*/rename", async (context) => {
 
     let finalFilename = newFilename.trim();
     
+    // Get current relativePath for metadata lookup
+    const currentRelativePath = path.relative(CONSTANTS.OPTIMIZED_DIR, fullPath).replace(/\\/g, "/");
+    
     // Generate SEO filename if requested
     if (useSEO) {
-      const metadata = loadMetadata(fullPath, decodedPath, "");
+      const originalPath = fullPath.replace(/optimized/g, "originals").replace(/\.(webp|jpeg)$/i, path.extname(fullPath) || ".jpg");
+      const metadata = loadMetadata(fullPath, currentRelativePath, originalPath);
       const baseName = path.parse(newFilename).name;
       const ext = path.parse(newFilename).ext || path.extname(fullPath);
       const seoName = generateSEOFilename(baseName, metadata?.title, metadata?.altText);
       finalFilename = `${seoName}${ext}`;
     }
 
-    const newPath = await renameImage(fullPath, finalFilename, decodedPath);
+    const newPath = await renameImage(fullPath, finalFilename, currentRelativePath);
     
     // Invalidate cache for old and new paths
     invalidateImageCache(fullPath);
@@ -667,18 +678,19 @@ app.post("/api/images/*/rename", async (context) => {
     
     const newRelativePath = path.relative(CONSTANTS.OPTIMIZED_DIR, newPath).replace(/\\/g, "/");
 
-    return {
+    return Response.json({
       success: true,
       newPath: newRelativePath,
       downloadUrl: `/download/${newRelativePath}`,
-    };
-  } catch (error) {
-    logger.error("Error renaming image:", error);
-    return {
-      success: false,
-      error: sanitizeError(error),
-    };
-  }
+      previewUrl: `/api/images/${encodeURIComponent(newRelativePath)}/preview`,
+    });
+    } catch (error) {
+      logger.error("Error renaming image:", error);
+      return Response.json({
+        success: false,
+        error: sanitizeError(error),
+      }, { status: 500 });
+    }
 });
 
 // Export images for WordPress
@@ -793,7 +805,37 @@ if (config.nodeEnv === "production") {
       
       // If file exists, serve it
       if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
-        return Bun.file(requestedFile);
+        // Determine Content-Type based on file extension for proper browser handling
+        const ext = path.extname(filePath).toLowerCase();
+        const contentTypeMap: Record<string, string> = {
+          ".html": "text/html; charset=utf-8",
+          ".js": "application/javascript; charset=utf-8",
+          ".mjs": "application/javascript; charset=utf-8",
+          ".css": "text/css; charset=utf-8",
+          ".json": "application/json; charset=utf-8",
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".svg": "image/svg+xml",
+          ".webp": "image/webp",
+          ".woff": "font/woff",
+          ".woff2": "font/woff2",
+          ".ttf": "font/ttf",
+          ".eot": "application/vnd.ms-fontobject",
+          ".ico": "image/x-icon",
+        };
+        
+        const contentType = contentTypeMap[ext] || "application/octet-stream";
+        const file = Bun.file(requestedFile);
+        
+        // Return file with proper Content-Type and cache headers
+        return new Response(file, {
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": ext === ".html" ? "no-cache, no-store, must-revalidate" : "public, max-age=31536000, immutable",
+          },
+        });
       }
       
       // If file doesn't exist and it's not an asset (no extension), serve index.html (SPA fallback)
