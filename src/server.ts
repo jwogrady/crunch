@@ -591,9 +591,18 @@ if (config.nodeEnv === "production") {
   if (!fs.existsSync(distPath)) {
     logger.warn("Static dist directory not found. Attempting to build...");
     try {
-      const { execSync } = require("child_process");
-      execSync("bun run build", { stdio: "inherit", cwd: process.cwd() });
-      logger.info("Frontend built successfully");
+      // Use Bun.spawn to run build command
+      const proc = Bun.spawn(["bun", "run", "build"], {
+        cwd: process.cwd(),
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode === 0) {
+        logger.info("Frontend built successfully");
+      } else {
+        throw new Error(`Build failed with exit code ${exitCode}`);
+      }
     } catch (error) {
       logger.error("Failed to build frontend:", error);
       logger.warn("Continuing without static file serving...");
