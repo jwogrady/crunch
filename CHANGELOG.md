@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 0.1.0-alpha.1 (2025-10-31)
+
+
+### 🔨 Chores
+
+* setup semantic versioning and conventional commits ([54fdeeb](https://github.com/yourusername/bun-image-optimizer/commit/54fdeebaeae75a1733e24227560b1c632b5b43fd))
+
+## 1.0.0 (2025-10-31)
+
+
+### 🔨 Chores
+
+* setup semantic versioning and conventional commits ([54fdeeb](https://github.com/yourusername/bun-image-optimizer/commit/54fdeebaeae75a1733e24227560b1c632b5b43fd))
+
 ## [1.0.0] - 2025-10-31
 
 ### ✨ Features
@@ -62,4 +76,3 @@ All notable changes to this project will be documented in this file. See [standa
 - Conventional commits
 - CI/CD pipeline
 - Automated releases
-
