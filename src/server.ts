@@ -695,29 +695,40 @@ if (config.nodeEnv === "production") {
   
   // Check if dist directory exists after potential build
   if (fs.existsSync(distPath)) {
-    // Serve static files
+    // Serve static files - this should only match non-API routes
+    // API routes are registered above and should match first
     app.get("/*", (context) => {
       const url = new URL(context.request.url);
       let filePath = url.pathname;
       
-      // Default to index.html for root and non-API routes
-      if (filePath === "/" || (!filePath.startsWith("/api") && !filePath.startsWith("/optimize") && !filePath.startsWith("/download"))) {
-        // Try to serve the requested file
-        const requestedFile = path.join(distPath, filePath === "/" ? "index.html" : filePath);
-        
-        // If file doesn't exist and it's not an asset, serve index.html (SPA fallback)
-        if (!fs.existsSync(requestedFile) && !filePath.includes(".")) {
-          return Bun.file(path.join(distPath, "index.html"));
-        }
-        
-        if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
-          return Bun.file(requestedFile);
-        }
-        
-        // Fallback to index.html for SPA routing
+      // NEVER serve static files for API routes - they should be handled by API routes above
+      if (filePath.startsWith("/api") || filePath.startsWith("/optimize") || filePath.startsWith("/download")) {
+        // This should not happen if routes are registered correctly, but return JSON error just in case
+        return {
+          success: false,
+          error: "Not Found",
+        };
+      }
+      
+      // Default to index.html for root
+      if (filePath === "/") {
         return Bun.file(path.join(distPath, "index.html"));
       }
       
+      // Try to serve the requested file
+      const requestedFile = path.join(distPath, filePath);
+      
+      // If file exists, serve it
+      if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
+        return Bun.file(requestedFile);
+      }
+      
+      // If file doesn't exist and it's not an asset (no extension), serve index.html (SPA fallback)
+      if (!filePath.includes(".")) {
+        return Bun.file(path.join(distPath, "index.html"));
+      }
+      
+      // Asset file not found
       return new Response("Not Found", { status: 404 });
     });
     

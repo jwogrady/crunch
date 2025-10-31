@@ -292,7 +292,19 @@ export default function Gallery() {
                           alt={image.altText || image.filename}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          onError={(e) => {
+                            // Replace broken image with placeholder
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = "none";
+                            const placeholder = target.parentElement?.querySelector(".image-placeholder");
+                            if (placeholder) {
+                              (placeholder as HTMLElement).style.display = "flex";
+                            }
+                          }}
                         />
+                        <div className="image-placeholder absolute inset-0 bg-gray-200 flex items-center justify-center text-gray-400 text-xs" style={{ display: "none" }}>
+                          No Preview
+                        </div>
                       </div>
                       <div className="p-2 bg-white">
                         <p className="text-xs font-medium text-gray-900 truncate">{image.filename}</p>
@@ -320,7 +332,19 @@ export default function Gallery() {
                         src={selectedImage.previewUrl}
                         alt={selectedImage.altText || selectedImage.filename}
                         className="w-full rounded-lg border border-gray-200"
+                        onError={(e) => {
+                          // Replace broken image with placeholder
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = "none";
+                          const placeholder = target.parentElement?.querySelector(".image-placeholder-large");
+                          if (placeholder) {
+                            (placeholder as HTMLElement).style.display = "flex";
+                          }
+                        }}
                       />
+                      <div className="image-placeholder-large bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 text-sm min-h-[200px]" style={{ display: "none" }}>
+                        Preview unavailable
+                      </div>
                     </div>
 
                     {/* Technical Info */}
