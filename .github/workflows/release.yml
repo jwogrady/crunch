@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      
+      - name: Install dependencies
+        run: bun install
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Run tests
+        run: bun test
+      
+      - name: Build
+        run: bunx vite build
+      
+      - name: Generate changelog and bump version
+        id: version
+        run: |
+          bunx standard-version
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+      
+      - name: Extract changelog for release
+        id: changelog
+        run: |
+          # Extract the latest release notes from CHANGELOG.md
+          sed -n '/^## \[/,/^## \[/p' CHANGELOG.md | head -n -1 > /tmp/release_notes.md || true
+          if [ ! -s /tmp/release_notes.md ]; then
+            # Fallback: use first section if pattern doesn't match
+            sed -n '/^## \[/,/^---/p' CHANGELOG.md > /tmp/release_notes.md || true
+          fi
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body_path: /tmp/release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Push tags and changes
+        run: |
+          git push --follow-tags origin main

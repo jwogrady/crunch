@@ -1,0 +1,73 @@
+{
+  "name": "bun-image-optimizer",
+  "version": "1.0.0",
+  "description": "Image optimization app using Bun and Supabase UI",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/bun-image-optimizer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/bun-image-optimizer/issues"
+  },
+  "homepage": "https://github.com/yourusername/bun-image-optimizer#readme",
+  "keywords": [
+    "image-optimization",
+    "bun",
+    "sharp",
+    "react",
+    "vite",
+    "elysia"
+  ],
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "dev": "bun run src/server.ts",
+    "dev:frontend": "vite",
+    "dev:all": "concurrently \"bun run dev\" \"bun run dev:frontend\"",
+    "build": "bunx vite build",
+    "build:server": "bun run src/server.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "test:all": "bun test tests/",
+    "lint": "bun run --bun src/server.ts --dry-run || true",
+    "commit": "git-cz",
+    "release": "bunx standard-version",
+    "release:minor": "bunx standard-version --release-as minor",
+    "release:major": "bunx standard-version --release-as major",
+    "release:patch": "bunx standard-version --release-as patch",
+    "release:dry-run": "bunx standard-version --dry-run"
+  },
+  "dependencies": {
+    "elysia": "^1.1.0",
+    "@elysiajs/cors": "^1.1.0",
+    "sharp": "^0.33.0",
+    "archiver": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/node": "^20.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0",
+    "concurrently": "^8.2.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "@commitlint/cli": "^18.4.3",
+    "@commitlint/config-conventional": "^18.4.3",
+    "standard-version": "^9.5.0",
+    "commitizen": "^4.3.0",
+    "cz-conventional-changelog": "^3.3.0"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  }
+}
+

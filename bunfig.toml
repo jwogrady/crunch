@@ -1,0 +1,8 @@
+[install]
+# Bun configuration
+production = false
+
+[test]
+# Test configuration
+coverage = true
+timeout = 30000
