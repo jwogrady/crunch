@@ -879,6 +879,23 @@ if (config.nodeEnv === "production") {
   }
 }
 
+// Add custom 404 handler for better debugging
+app.onError(({ code, error, path, set }) => {
+  if (code === "NOT_FOUND") {
+    logger.warn(`Route not found: ${path} - This may indicate a routing issue`);
+    // Return JSON for API routes, plain text for others
+    if (path.startsWith("/api")) {
+      set.status = 404;
+      return Response.json({
+        success: false,
+        error: "Route not found",
+        path,
+      }, { status: 404 });
+    }
+  }
+  // Let Elysia handle other errors normally
+});
+
 // Start server (async to allow build fallback)
 app.listen(config.port);
 
