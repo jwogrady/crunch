@@ -593,18 +593,35 @@ app.get("/api/images/*/preview", async (context) => {
       }
     }
     
-    logger.debug(`Preview image found, generating thumbnail`);
+    logger.debug(`Preview image found, generating thumbnail from: ${finalPath}`);
+
+    // Verify file actually exists before generating thumbnail
+    if (!fs.existsSync(finalPath)) {
+      logger.warn(`Preview file does not exist: ${finalPath}`);
+      return Response.json({
+        success: false,
+        error: "Image not found",
+      }, { status: 404 });
+    }
 
     // Get cached thumbnail or generate new one
-    const thumbnail = await getCachedThumbnail(finalPath, CONSTANTS.THUMBNAIL_SIZE);
+    try {
+      const thumbnail = await getCachedThumbnail(finalPath, CONSTANTS.THUMBNAIL_SIZE);
 
-    return new Response(thumbnail, {
-      headers: {
-        "Content-Type": "image/webp",
-        "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Cache": "HIT",
-      },
-    });
+      return new Response(thumbnail, {
+        headers: {
+          "Content-Type": "image/webp",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    } catch (thumbError) {
+      logger.error(`Error generating thumbnail for ${finalPath}:`, thumbError);
+      // Return 404 so frontend onError handler can show placeholder
+      return Response.json({
+        success: false,
+        error: "Failed to generate preview",
+      }, { status: 500 });
+    }
   } catch (error) {
     logger.error("Error generating preview:", error);
     return Response.json({

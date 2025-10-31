@@ -92,16 +92,26 @@ export async function getCachedThumbnail(
     return cached;
   }
 
-  // Generate thumbnail
-  const thumbnail = await sharp(imagePath)
-    .resize(size, null, { withoutEnlargement: true })
-    .webp({ quality: CONSTANTS.THUMBNAIL_QUALITY })
-    .toBuffer();
+  // Verify file exists before processing
+  if (!fs.existsSync(imagePath)) {
+    throw new Error(`Image file not found: ${imagePath}`);
+  }
 
-  // Cache for 1 hour
-  thumbnailCache.set(cacheKey, thumbnail, CONSTANTS.CACHE_TTL);
-  
-  return thumbnail;
+  // Generate thumbnail
+  try {
+    const thumbnail = await sharp(imagePath)
+      .resize(size, null, { withoutEnlargement: true })
+      .webp({ quality: CONSTANTS.THUMBNAIL_QUALITY })
+      .toBuffer();
+
+    // Cache for 1 hour
+    thumbnailCache.set(cacheKey, thumbnail, CONSTANTS.CACHE_TTL);
+    
+    return thumbnail;
+  } catch (error) {
+    // Re-throw with more context
+    throw new Error(`Failed to generate thumbnail for ${imagePath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
