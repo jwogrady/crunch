@@ -583,6 +583,45 @@ app.get("/api/images/export/wordpress", async () => {
   }
 });
 
+// Serve static files in production (for Railway full-stack deployment)
+if (config.nodeEnv === "production") {
+  const distPath = path.join(process.cwd(), "src/web/dist");
+  
+  // Check if dist directory exists
+  if (fs.existsSync(distPath)) {
+    // Serve static files
+    app.get("/*", (context) => {
+      const url = new URL(context.request.url);
+      let filePath = url.pathname;
+      
+      // Default to index.html for root and non-API routes
+      if (filePath === "/" || (!filePath.startsWith("/api") && !filePath.startsWith("/optimize") && !filePath.startsWith("/download"))) {
+        // Try to serve the requested file
+        const requestedFile = path.join(distPath, filePath === "/" ? "index.html" : filePath);
+        
+        // If file doesn't exist and it's not an asset, serve index.html (SPA fallback)
+        if (!fs.existsSync(requestedFile) && !filePath.includes(".")) {
+          return Bun.file(path.join(distPath, "index.html"));
+        }
+        
+        if (fs.existsSync(requestedFile) && fs.statSync(requestedFile).isFile()) {
+          return Bun.file(requestedFile);
+        }
+        
+        // Fallback to index.html for SPA routing
+        return Bun.file(path.join(distPath, "index.html"));
+      }
+      
+      return new Response("Not Found", { status: 404 });
+    });
+    
+    logger.info("Static file serving enabled from: src/web/dist");
+  } else {
+    logger.warn("Static dist directory not found. Skipping static file serving.");
+    logger.warn("Build frontend first: bun run build");
+  }
+}
+
 app.listen(config.port);
 
 logger.info(`Server running at http://localhost:${config.port}`);

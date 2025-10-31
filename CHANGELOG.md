@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.1.1-alpha.1] - 2025-10-31
+
+### 🧹 Cleanup
+
+- Consolidated deployment documentation (removed redundant Railway configs)
+- Removed test artifacts and build outputs
+- Updated project structure for alpha release
+- Streamlined documentation references
+- Improved `.gitignore` organization
+
 ## [0.1.0-alpha.1] - 2025-10-31
 
 ### 🔨 Chores

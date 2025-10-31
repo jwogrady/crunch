@@ -1,6 +1,6 @@
 {
   "name": "bun-image-optimizer",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.1-alpha.1",
   "description": "Image optimization app using Bun and Supabase UI",
   "type": "module",
   "repository": {
@@ -27,6 +27,11 @@
     "dev:all": "concurrently \"bun run dev\" \"bun run dev:frontend\"",
     "build": "bunx vite build",
     "build:server": "bun run src/server.ts",
+    "build:railway": "bun run build",
+    "deploy:railway": "railway up",
+    "deploy:railway:backend": "railway link && railway up --service backend",
+    "deploy:railway:frontend": "railway link && railway up --service frontend",
+    "start": "bun run src/server.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",

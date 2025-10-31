@@ -24,7 +24,14 @@ A full-stack image optimization web app using **Bun** as the backend runtime and
 
 ## Quick Start
 
-See [QUICKSTART.md](./QUICKSTART.md) for detailed instructions.
+### Prerequisites
+
+Install Bun:
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+### Installation
 
 ```bash
 # Install dependencies
@@ -35,6 +42,10 @@ bun run dev:all
 ```
 
 Then open **http://localhost:5173** in your browser!
+
+The app runs:
+- **Backend** on `http://localhost:3000`
+- **Frontend** on `http://localhost:5173`
 
 ## Development
 
@@ -71,7 +82,24 @@ bun run commit
 # fix(frontend): resolve preview 404 errors
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for commit guidelines.
+### Commit Message Format
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+
+**Examples:**
+- `feat(server): add rate limiting`
+- `fix(frontend): resolve preview 404 errors`
+- `docs: update deployment guide`
 
 ### Releases
 
@@ -85,7 +113,10 @@ bun run release:minor   # 1.0.0 -> 1.1.0
 bun run release:major   # 1.0.0 -> 2.0.0
 ```
 
-See [RELEASE.md](./RELEASE.md) for release process.
+Releases use [Semantic Versioning](https://semver.org/). Version is automatically bumped based on commit types:
+- `feat`: MINOR bump
+- `fix`: PATCH bump
+- Breaking changes: MAJOR bump
 
 ## API Endpoints
 
@@ -120,7 +151,7 @@ originals/
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure:
+Environment variables (optional, defaults provided):
 
 ```bash
 PORT=3000
@@ -130,7 +161,7 @@ MAX_FILE_SIZE=52428800
 MAX_FILES_PER_REQUEST=20
 ```
 
-See `.env.example` for all options.
+See `src/utils/config.ts` for all configuration options.
 
 ## Testing
 
@@ -138,7 +169,13 @@ See `.env.example` for all options.
 - **Integration Tests**: Build and runtime verification
 - **Unit Tests**: All core modules
 
-Run `bun test:coverage` for detailed coverage report.
+```bash
+bun test             # Run all tests
+bun test:coverage    # With coverage report
+bun test:watch       # Watch mode
+```
+
+Tests verify all core functionality including image optimization, metadata management, security, and caching.
 
 ## Security
 
@@ -153,11 +190,19 @@ Run `bun test:coverage` for detailed coverage report.
 
 MIT
 
-## Contributing
+## Deployment
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+See [DEPLOY.md](./DEPLOY.md) for Railway deployment guide.
+
+Quick deploy:
+```bash
+npm install -g @railway/cli
+railway login
+railway init
+railway up
+```
 
 ---
 
-**Version**: 1.0.0  
+**Version**: 0.1.1-alpha.1  
 **Last Updated**: 2025-10-31
