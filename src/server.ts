@@ -564,24 +564,23 @@ app.get("/api/images/*/preview", async (context) => {
     logger.debug(`Looking for preview image at: ${finalPath}`);
     
     // If direct path doesn't exist, try to find by filename (backwards compatibility)
+    // This matches the download endpoint logic exactly
     if (!fs.existsSync(finalPath)) {
       // Use decoded filename for search (same as download endpoint)
       const fileName = path.basename(decodedPath);
       logger.debug(`Direct path not found for preview, searching for filename: ${fileName}`);
       const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
       if (found) {
-        // Validate found path too
+        // Validate found path too (same as download endpoint)
         const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
         const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
         if (foundValidation.valid && foundValidation.filePath) {
           finalPath = foundValidation.filePath;
           logger.debug(`Found preview image at: ${finalPath}`);
         } else {
-          logger.warn(`Found file but validation failed: ${found}`);
-          return Response.json({
-            success: false,
-            error: "Image not found",
-          }, { status: 404 });
+          // If validation fails, use the found path directly (same fallback as download)
+          finalPath = found;
+          logger.debug(`Using found file path directly: ${finalPath}`);
         }
       } else {
         logger.warn(`Preview image not found: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
