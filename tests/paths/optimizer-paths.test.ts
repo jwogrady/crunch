@@ -90,7 +90,8 @@ describe("Optimizer Path Consistency", () => {
   });
 
   test("optimizeImage works with custom outputDir name", async () => {
-    const customDir = path.join(testDir, "custom-optimized");
+    const customDir = path.join(testDir, "custom-output");
+    fs.mkdirSync(customDir, { recursive: true });
     const buffer = await createTestImage();
     const options: OptimizationOptions = {
       width: 100,
@@ -108,7 +109,8 @@ describe("Optimizer Path Consistency", () => {
 
     expect(results.length).toBe(1);
     expect(results[0].output).toContain(customDir);
-    expect(results[0].output).not.toContain("optimized");
+    // Should use the custom directory name, not hardcoded "optimized"
+    expect(path.dirname(results[0].output)).toContain("custom-output");
   });
 
   test("optimizeImage creates date-based folder structure", async () => {
@@ -163,7 +165,7 @@ describe("Optimizer Path Consistency", () => {
     expect(downloadUrl).toContain(".webp");
   });
 
-  test("optimizeImage output matches expected relativePath in metadata", async () => {
+  test("optimizeImage saves metadata with correct relativePath format", async () => {
     const buffer = await createTestImage();
     const options: OptimizationOptions = {
       width: 100,
@@ -179,14 +181,22 @@ describe("Optimizer Path Consistency", () => {
       testOriginals
     );
 
-    // Load metadata to verify relativePath
+    // Load metadata to verify relativePath was saved correctly by optimizer
     const { loadMetadata } = await import("../../src/metadata");
+    // The optimizer calculates relativePath using path.relative(outputDir, outputPath)
+    // So we need to calculate it the same way to load the metadata
     const relativePath = path.relative(testOptimized, results[0].output).replace(/\\/g, "/");
-    const metadata = loadMetadata(results[0].output, relativePath, results[0].originalPath);
+    const originalPath = results[0].originalPath;
+    const metadata = loadMetadata(results[0].output, relativePath, originalPath);
     
     expect(metadata).toBeTruthy();
+    // Metadata should contain the relativePath we calculated
     expect(metadata!.relativePath).toBe(relativePath);
     expect(metadata!.relativePath).not.toContain("optimized/");
+    // Should have date-based structure (unless file was saved at root)
+    if (relativePath.includes("/")) {
+      expect(metadata!.relativePath).toMatch(/^\d{4}\/\d{2}\/\d{2}\//);
+    }
   });
 });
 

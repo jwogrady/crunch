@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { getAllImages } from "../../src/metadata";
 import fs from "fs";
 import path from "path";
@@ -23,6 +23,11 @@ describe("URL Construction Consistency", () => {
 
   async function createTestImage(dir: string, filename: string): Promise<string> {
     const filePath = path.join(dir, filename);
+    // Ensure directory exists (handles nested paths like "2025/10/31/test.jpg")
+    const fileDir = path.dirname(filePath);
+    if (!fs.existsSync(fileDir)) {
+      fs.mkdirSync(fileDir, { recursive: true });
+    }
     await sharp({
       create: {
         width: 100,
