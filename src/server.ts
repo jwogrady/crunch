@@ -297,6 +297,24 @@ app.get("/api/images", async () => {
     const imagesWithMetadata = await Promise.all(
       images.map(async (img) => {
         try {
+          // Check if image file actually exists
+          if (!fs.existsSync(img.path)) {
+            logger.warn(`Image file does not exist: ${img.path}`);
+            // Try to load metadata anyway (might exist even if file is missing)
+            let metadata = loadMetadata(img.path, img.relativePath, img.originalPath);
+            if (metadata) {
+              // Return metadata but mark file as missing
+              return {
+                ...metadata,
+                previewUrl: `/api/images/${encodeURIComponent(img.relativePath)}/preview`,
+                downloadUrl: `/download/${img.relativePath}`,
+                fileMissing: true,
+              };
+            }
+            // Skip this image entirely if file and metadata both missing
+            return null;
+          }
+
           let metadata = loadMetadata(img.path, img.relativePath, img.originalPath);
           
           // If no metadata exists, create it
@@ -329,10 +347,13 @@ app.get("/api/images", async () => {
       })
     );
 
+    // Filter out null entries (missing files with no metadata)
+    const validImages = imagesWithMetadata.filter((img): img is NonNullable<typeof img> => img !== null);
+
     return Response.json({
       success: true,
-      images: imagesWithMetadata,
-      count: imagesWithMetadata.length,
+      images: validImages,
+      count: validImages.length,
     });
   } catch (error) {
     logger.error("Error listing images:", error);
@@ -521,31 +542,35 @@ app.get("/api/images/*/preview", async (context) => {
   try {
     const wildcard = context.params["*"] as string;
     if (!wildcard) {
-      return new Response("Image path required", { status: 400 });
+      return Response.json({
+        success: false,
+        error: "Image path required",
+      }, { status: 400 });
     }
     
     // Decode URL-encoded path (handles %2F for slashes)
     const decodedPath = decodeURIComponent(wildcard);
     logger.debug(`Preview request - wildcard: ${wildcard}, decoded: ${decodedPath}`);
-    
-    const fullPath = path.join(CONSTANTS.OPTIMIZED_DIR, decodedPath);
 
     // Security check
-    const { valid, filePath, error } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+    const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
     
     if (!valid || !filePath) {
-      logger.warn(`Invalid path: ${decodedPath}`, error);
-      return new Response(error || "Invalid path", { status: 400 });
+      logger.warn(`Invalid path for preview: ${decodedPath}`, validationError);
+      return Response.json({
+        success: false,
+        error: validationError || "Invalid path",
+      }, { status: 400 });
     }
 
     // filePath from validateImagePath already includes baseDir, use it directly
     let finalPath = path.resolve(filePath);
-    logger.debug(`Looking for image at: ${finalPath}`);
+    logger.debug(`Looking for preview image at: ${finalPath}`);
     
     // If direct path doesn't exist, try to find by filename (backwards compatibility)
     if (!fs.existsSync(finalPath)) {
       const fileName = path.basename(decodedPath);
-      logger.debug(`Direct path not found, searching for filename: ${fileName}`);
+      logger.debug(`Direct path not found for preview, searching for filename: ${fileName}`);
       const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
       if (found) {
         // Validate found path too
@@ -553,18 +578,33 @@ app.get("/api/images/*/preview", async (context) => {
         const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
         if (foundValidation.valid && foundValidation.filePath) {
           finalPath = foundValidation.filePath;
-          logger.debug(`Found image at: ${finalPath}`);
+          logger.debug(`Found preview image at: ${finalPath}`);
         } else {
           logger.warn(`Found file but validation failed: ${found}`);
-          return new Response("Image not found", { status: 404 });
+          return Response.json({
+            success: false,
+            error: "Image not found",
+          }, { status: 404 });
         }
       } else {
-        logger.warn(`Image not found: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
-        return new Response("Image not found", { status: 404 });
+        logger.warn(`Preview image not found: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
+        // Return a transparent 1x1 PNG as placeholder instead of 404
+        // This prevents broken image icons and allows the onError handler to show placeholder
+        const transparentPng = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64"
+        );
+        return new Response(transparentPng, {
+          headers: {
+            "Content-Type": "image/png",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Image-Missing": "true",
+          },
+        });
       }
     }
     
-    logger.debug(`Image found, generating thumbnail`);
+    logger.debug(`Preview image found, generating thumbnail`);
 
     // Get cached thumbnail or generate new one
     const thumbnail = await getCachedThumbnail(finalPath, CONSTANTS.THUMBNAIL_SIZE);
@@ -573,12 +613,15 @@ app.get("/api/images/*/preview", async (context) => {
       headers: {
         "Content-Type": "image/webp",
         "Cache-Control": "public, max-age=31536000, immutable",
-        "X-Cache": "HIT", // For debugging
+        "X-Cache": "HIT",
       },
     });
   } catch (error) {
     logger.error("Error generating preview:", error);
-    return new Response(sanitizeError(error), { status: 500 });
+    return Response.json({
+      success: false,
+      error: sanitizeError(error),
+    }, { status: 500 });
   }
 });
 
