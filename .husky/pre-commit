@@ -1,8 +1,12 @@
 #!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
 
 # Run tests before commit (optional - can be slow)
 # bun test
+
+# Skip commitlint on initial commit (no COMMIT_EDITMSG exists yet)
+if [ ! -f .git/COMMIT_EDITMSG ]; then
+  exit 0
+fi
 
 # Check commit message format
 bunx commitlint --edit $1
