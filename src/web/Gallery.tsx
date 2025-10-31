@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { formatBytes } from "../utils/helpers";
+import { formatBytes } from "./utils/helpers";
 
 interface ImageMetadata {
   filename: string;

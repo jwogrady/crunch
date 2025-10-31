@@ -17,8 +17,8 @@ interface ApiResponse {
   error?: string;
 }
 
-// Use shared formatBytes from utils
-import { formatBytes } from "../utils/helpers";
+// Use frontend-safe formatBytes
+import { formatBytes } from "./utils/helpers";
 
 // Custom UI Components styled like Supabase UI
 const Card = ({ children, title, className = "" }: { children: React.ReactNode; title?: string; className?: string }) => (

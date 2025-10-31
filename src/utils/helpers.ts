@@ -2,6 +2,7 @@ import path from "path";
 
 /**
  * Format bytes to human-readable string
+ * NOTE: For frontend use, import from src/web/utils/helpers.ts instead
  */
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
