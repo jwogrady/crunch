@@ -37,10 +37,12 @@ Deploy both frontend and backend on Railway in a single service.
 
 ### Railway Settings
 
-Railway auto-detects Bun and configures:
-- Build command: `bun install && bun run build`
-- Start command: `bun run src/server.ts`
-- Automatic static file serving from `src/web/dist`
+Railway configuration in `railway.toml`:
+- **Build command**: `bun install && bun run build` (creates `src/web/dist/`)
+- **Start command**: `bun run src/server.ts`
+- **Automatic static file serving**: Backend serves files from `src/web/dist` in production
+
+**Important**: Make sure `railway.toml` has `buildCommand` set, otherwise Railway may not build the frontend.
 
 ### Build Script
 

@@ -40,7 +40,7 @@ This will:
 
 ### 4. Configure Build & Start Commands
 
-Railway should auto-detect, but verify in Railway dashboard:
+Railway will use the configuration from `railway.toml`:
 
 **Build Command:**
 ```bash
@@ -51,6 +51,8 @@ bun install && bun run build
 ```bash
 bun run src/server.ts
 ```
+
+**Important**: The `railway.toml` file must have `buildCommand` set. If not, the frontend won't be built and you'll see warnings about missing `src/web/dist`.
 
 The server automatically serves static files from `src/web/dist` in production.
 

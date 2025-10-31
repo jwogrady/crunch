@@ -3,7 +3,7 @@
 
 [build]
   builder = "NIXPACKS"
-  # Build command will be: bun install && bun run build
+  buildCommand = "bun install && bun run build"
 
 [deploy]
   startCommand = "bun run src/server.ts"
@@ -14,4 +14,5 @@
 
 # Railway auto-detects Bun runtime
 # Backend serves static files from src/web/dist in production
+# Build command ensures frontend is built before server starts
 
