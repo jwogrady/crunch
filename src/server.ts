@@ -559,12 +559,13 @@ app.get("/api/images/*/preview", async (context) => {
       }, { status: 400 });
     }
 
-    // filePath from validateImagePath already includes baseDir, use it directly
-    let finalPath = path.resolve(filePath);
+    // filePath from validateImagePath is already an absolute resolved path
+    let finalPath = filePath;
     logger.debug(`Looking for preview image at: ${finalPath}`);
     
     // If direct path doesn't exist, try to find by filename (backwards compatibility)
     if (!fs.existsSync(finalPath)) {
+      // Use decoded filename for search (same as download endpoint)
       const fileName = path.basename(decodedPath);
       logger.debug(`Direct path not found for preview, searching for filename: ${fileName}`);
       const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
