@@ -362,18 +362,50 @@ app.put("/api/images/*/metadata", async (context) => {
   try {
     const imagePath = (context.params["*"] as string) || "";
     const decodedPath = decodeURIComponent(imagePath);
-    const fullPath = path.join("optimized", decodedPath);
-
-    // Security check
-    const resolvedPath = path.resolve(fullPath);
-    const optimizedDir = path.resolve("optimized");
-    if (!resolvedPath.startsWith(optimizedDir)) {
-      return new Response("Invalid path", { status: 400 });
+    
+    // Use validateImagePath for security and proper path resolution
+    const { valid, filePath, error: validationError } = validateImagePath(decodedPath, CONSTANTS.OPTIMIZED_DIR);
+    
+    if (!valid || !filePath) {
+      logger.warn(`Invalid path for metadata update: ${decodedPath}`, validationError);
+      return {
+        success: false,
+        error: validationError || "Invalid path",
+      };
     }
 
-    if (!fs.existsSync(fullPath)) {
-      return new Response("Image not found", { status: 404 });
+    // Try direct path first
+    let finalPath = path.resolve(filePath);
+    
+    // If direct path doesn't exist, try to find by filename (backwards compatibility)
+    if (!fs.existsSync(finalPath)) {
+      const fileName = path.basename(decodedPath);
+      logger.debug(`Direct path not found for metadata update, searching for filename: ${fileName}`);
+      const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
+      if (found) {
+        const foundRelative = path.relative(CONSTANTS.OPTIMIZED_DIR, found);
+        const foundValidation = validateImagePath(foundRelative, CONSTANTS.OPTIMIZED_DIR);
+        if (foundValidation.valid && foundValidation.filePath) {
+          finalPath = foundValidation.filePath;
+          logger.debug(`Found image for metadata update at: ${finalPath}`);
+        } else {
+          logger.warn(`Found file but validation failed: ${found}`);
+          return {
+            success: false,
+            error: "Image not found",
+          };
+        }
+      } else {
+        logger.warn(`Image not found for metadata update: ${finalPath}`, { decodedPath, filePath, searchedFileName: fileName });
+        return {
+          success: false,
+          error: "Image not found",
+        };
+      }
     }
+    
+    // Update decodedPath to match found file for metadata consistency
+    const relativePathForMetadata = path.relative(CONSTANTS.OPTIMIZED_DIR, finalPath);
 
     const body = await context.request.json();
     
@@ -388,9 +420,9 @@ app.put("/api/images/*/metadata", async (context) => {
         : undefined,
     };
     
-    const originalPath = fullPath.replace(/optimized/g, "originals").replace(/\.(webp|jpeg)$/i, path.extname(fullPath) || ".jpg");
+    const originalPath = finalPath.replace(/optimized/g, "originals").replace(/\.(webp|jpeg)$/i, path.extname(finalPath) || ".jpg");
     
-    const updated = await saveMetadata(fullPath, decodedPath, originalPath, sanitizedMetadata);
+    const updated = await saveMetadata(finalPath, relativePathForMetadata, originalPath, sanitizedMetadata);
 
     return {
       success: true,
