@@ -102,10 +102,14 @@ app.post("/optimize", async (context) => {
         const buffer = Buffer.from(await file.arrayBuffer());
         const results = await optimizeImage(buffer, file.name, options);
         
-        const urlResults = results.map((r) => ({
-          ...r,
-          downloadUrl: `/download/${r.output.replace(/\\/g, "/")}`,
-        }));
+        const urlResults = results.map((r) => {
+          // Convert full path to relative path (remove optimized/ prefix)
+          const relativePath = r.output.replace(/\\/g, "/").replace(/^optimized\//, "");
+          return {
+            ...r,
+            downloadUrl: `/download/${relativePath}`,
+          };
+        });
         
         allResults.push(...urlResults);
       } catch (error) {
