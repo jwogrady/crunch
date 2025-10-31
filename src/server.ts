@@ -143,7 +143,9 @@ app.post("/optimize", async (context) => {
 // Download endpoint with improved security
 app.get("/download/*", (context) => {
   try {
-    const relativePath = (context.params["*"] as string) || "";
+    const encodedPath = (context.params["*"] as string) || "";
+    // Decode URL-encoded path (handles spaces, special characters)
+    const relativePath = decodeURIComponent(encodedPath);
     
     // Validate and sanitize path
     const { valid, filePath, error } = validateImagePath(relativePath, CONSTANTS.OPTIMIZED_DIR);
@@ -157,6 +159,7 @@ app.get("/download/*", (context) => {
     
     // If direct path doesn't exist, try to find by filename (backwards compatibility)
     if (!fs.existsSync(finalPath)) {
+      // Use decoded filename for search
       const fileName = path.basename(relativePath);
       const found = findFileRecursive(CONSTANTS.OPTIMIZED_DIR, fileName);
       if (found) {
