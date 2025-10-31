@@ -297,21 +297,10 @@ app.get("/api/images", async () => {
     const imagesWithMetadata = await Promise.all(
       images.map(async (img) => {
         try {
-          // Check if image file actually exists
+          // Check if image file actually exists - skip if missing
           if (!fs.existsSync(img.path)) {
-            logger.warn(`Image file does not exist: ${img.path}`);
-            // Try to load metadata anyway (might exist even if file is missing)
-            let metadata = loadMetadata(img.path, img.relativePath, img.originalPath);
-            if (metadata) {
-              // Return metadata but mark file as missing
-              return {
-                ...metadata,
-                previewUrl: `/api/images/${encodeURIComponent(img.relativePath)}/preview`,
-                downloadUrl: `/download/${img.relativePath}`,
-                fileMissing: true,
-              };
-            }
-            // Skip this image entirely if file and metadata both missing
+            logger.warn(`Image file does not exist, skipping: ${img.path}`);
+            // Don't include images without actual files
             return null;
           }
 
