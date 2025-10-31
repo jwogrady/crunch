@@ -18,14 +18,24 @@ export function validateImagePath(
   const baseDirNormalized = baseDir.replace(/\\/g, "/");
   
   // Remove leading baseDir if present (handles both "optimized/" and "optimized\")
+  // Only remove if followed by slash or at end of string (to avoid removing partial matches)
   if (normalizedPath.toLowerCase().startsWith(baseDirNormalized.toLowerCase() + "/")) {
     normalizedPath = normalizedPath.substring(baseDirNormalized.length + 1);
+  } else if (normalizedPath.toLowerCase() === baseDirNormalized.toLowerCase()) {
+    // Edge case: path is exactly "optimized" - invalid, needs actual file path
+    return { valid: false, error: "Invalid path: must include file path, not just directory" };
   } else if (normalizedPath.toLowerCase().startsWith(baseDirNormalized.toLowerCase())) {
+    // Handle case where baseDir is at start but not followed by slash (shouldn't happen but be safe)
     normalizedPath = normalizedPath.substring(baseDirNormalized.length);
   }
   
   // Remove any leading slashes after normalization
   normalizedPath = normalizedPath.replace(/^\/+/, "");
+  
+  // Ensure we have a non-empty path after normalization
+  if (!normalizedPath || normalizedPath.trim() === "") {
+    return { valid: false, error: "Invalid path: empty path after normalization" };
+  }
 
   // Sanitize path
   const sanitized = sanitizePath(normalizedPath);
