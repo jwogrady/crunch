@@ -89,13 +89,20 @@ Railway will automatically deploy on push!
 
 ## 📋 What Happens During Deploy
 
-1. **Install dependencies:** `bun install`
-2. **Build frontend:** `bun run build` → Creates `src/web/dist/`
-3. **Start backend:** `bun run src/server.ts`
-4. **Backend serves:**
+1. **Build Phase** (`railway-build.sh`):
+   - Install dependencies: `bun install`
+   - Build frontend: `bun run build` → Creates `src/web/dist/`
+
+2. **Start Phase**:
+   - Start backend: `bun run src/server.ts`
+   - If `dist/` missing, server attempts auto-build (fallback)
+   
+3. **Backend serves:**
    - API routes (`/api/*`, `/optimize`, `/download/*`)
    - Static files from `src/web/dist/` (HTML, JS, CSS, assets)
    - SPA routing (all non-API routes → `index.html`)
+
+**Note:** The server has a fallback that builds the frontend if `src/web/dist/` is missing, ensuring it works even if Railway's build phase is skipped.
 
 ## 🌐 Getting Your URL
 

@@ -635,6 +635,7 @@ if (config.nodeEnv === "production") {
   }
 }
 
+// Start server (async to allow build fallback)
 app.listen(config.port);
 
 logger.info(`Server running at http://localhost:${config.port}`);
